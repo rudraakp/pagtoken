@@ -1,29 +1,51 @@
 from flask import Flask, request, render_template_string, redirect, url_for, flash
-import requests, os
+from flask_wtf import FlaskForm
+from wtforms import TextAreaField, StringField
+from wtforms.validators import DataRequired
+import requests
+import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "change_this_in_prod")
 
-HTML = \"\"\"<!doctype html>
+# Ensure secret key is set securely
+app.secret_key = os.environ.get("FLASK_SECRET")
+if not app.secret_key:
+    raise ValueError("FLASK_SECRET environment variable must be set")
+
+# Graph API URL as a constant
+GRAPH_API = "https://graph.facebook.com"
+
+# Flask-WTF form for CSRF protection and validation
+class TokenForm(FlaskForm):
+    user_token = TextAreaField("User Access Token", validators=[DataRequired()])
+    app_id = StringField("App ID", validators=[])
+    app_secret = StringField("App Secret", validators=[])
+
+HTML = """
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>FB Page Token Extractor — Detailed</title>
+    <title>FB Page Token Extractor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
       body { padding-top: 40px; background:#f8f9fa; }
-      .card { max-width: 1100px; margin: 0 auto; }
+      .card { max-width: 900px; margin: 0 auto; }
       textarea { font-family: monospace; }
-      .small-muted { font-size:0.9rem; color:#6c757d; }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="card shadow-sm">
         <div class="card-body">
-          <h3 class="card-title">Facebook Page Token Extractor — Detailed</h3>
-          <p class="small-muted">User access token daalein aur page ka name, id, category, fan count aur page token sab milega.</p>
+          <h3 class="card-title">Facebook Page Token Extractor</h3>
+          <p class="text-muted">User access token daalein aur sab page tokens le jaiye.</p>
 
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -34,64 +56,55 @@ HTML = \"\"\"<!doctype html>
           {% endwith %}
 
           <form method="post" action="{{ url_for('extract') }}">
+            {{ form.hidden_tag() }}
             <div class="mb-3">
               <label class="form-label">User Access Token</label>
-              <textarea name="user_token" rows="3" class="form-control" placeholder="Paste user access token here" required>{{ request.form.get('user_token','') }}</textarea>
+              {{ form.user_token(class="form-control", rows="3", placeholder="Paste user access token here") }}
             </div>
 
-            <div class="mb-3 row">
-              <div class="col">
-                <label class="form-label">(Optional) App ID</label>
-                <input type="text" name="app_id" class="form-control" placeholder="If you want to exchange short-lived token (optional)">
-              </div>
-              <div class="col">
-                <label class="form-label">(Optional) App Secret</label>
-                <input type="text" name="app_secret" class="form-control" placeholder="Required only if you want to get a long-lived user token via exchange">
-              </div>
+            <div class="mb-3">
+              <label class="form-label">(Optional) App ID</label>
+              {{ form.app_id(class="form-control", placeholder="If you want to exchange short-lived token (optional)") }}
             </div>
 
-            <button class="btn btn-primary">Get Page Tokens & Details</button>
-            <a href="{{ url_for('index') }}" class="btn btn-link">Reset</a>
+            <div class="mb-3">
+              <label class="form-label">(Optional) App Secret</label>
+              {{ form.app_secret(class="form-control", placeholder="Required only if you want to get a long-lived user token via exchange") }}
+            </div>
+
+            <button class="btn btn-primary">Get Page Tokens</button>
           </form>
 
-          {% if pages is defined %}
+          {% if pages %}
             <hr>
             <h5>Found {{ pages|length }} page(s)</h5>
-            {% if pages %}
-              <div class="table-responsive">
-                <table class="table table-sm table-bordered align-middle">
-                  <thead>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered">
+                <thead>
+                  <tr>
+                    <th>Page Name</th>
+                    <th>Page ID</th>
+                    <th>Page Access Token</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in pages %}
                     <tr>
-                      <th>Page Name</th>
-                      <th>Page ID</th>
-                      <th>Category</th>
-                      <th>Fan / Followers</th>
-                      <th>Permissions</th>
-                      <th>Page Access Token</th>
-                      <th>Actions</th>
+                      <td>{{ p.name }}</td>
+                      <td>{{ p.id }}</td>
+                      <td><textarea class="form-control token-area" rows="2" readonly>{{ p.access_token }}</textarea></td>
+                      <td>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn">Copy</button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {% for p in pages %}
-                      <tr>
-                        <td>{{ p.name }}</td>
-                        <td>{{ p.id }}</td>
-                        <td>{{ p.category or '-' }}</td>
-                        <td>{{ p.fan_count if p.fan_count is not none else '-' }}</td>
-                        <td>{{ p.perms | join(', ') if p.perms else '-' }}</td>
-                        <td style="min-width:320px;"><textarea class="form-control token-area" rows="2" readonly>{{ p.access_token }}</textarea></td>
-                        <td>
-                          <button class="btn btn-sm btn-outline-secondary copy-btn">Copy</button>
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              <p class="text-muted small">Note: Some fields may not be available depending on token permissions. If you see missing data, ensure token includes required scopes.</p>
-            {% else %}
-              <div class="alert alert-warning">Koi page nahi mila — token sahi hai ya permissions missing ho sakti hain (pages_show_list, pages_read_engagement, pages_read_user_content, pages_manage_metadata etc.).</div>
-            {% endif %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <p class="text-muted small">Note: Page tokens are shown as returned by Facebook. Some tokens may be short- or long-lived depending on how they were issued.</p>
+          {% elif pages is defined %}
+            <div class="alert alert-warning">Koi page nahi mila — token sahi hai ya permissions missing ho sakti hain (manage_pages/pages_read_engagement/pages_manage_posts etc.).</div>
           {% endif %}
         </div>
       </div>
@@ -105,17 +118,20 @@ HTML = \"\"\"<!doctype html>
           ta.select();
           document.execCommand('copy');
           e.target.innerText = 'Copied';
-          setTimeout(()=> e.target.innerText = 'Copy', 1500);
+          setTimeout(() => e.target.innerText = 'Copy', 1500);
         }
       });
     </script>
   </body>
 </html>
-\"\"\"
-
-GRAPH_API = "https://graph.facebook.com"
+"""
 
 def exchange_short_lived_for_long(user_token, app_id, app_secret):
+    """
+    Exchange short-lived user token for long-lived token.
+    Requires app_id and app_secret.
+    Returns token string on success, else original token.
+    """
     if not (app_id and app_secret):
         return user_token
     params = {
@@ -126,58 +142,77 @@ def exchange_short_lived_for_long(user_token, app_id, app_secret):
     }
     try:
         r = requests.get(f"{GRAPH_API}/oauth/access_token", params=params, timeout=12)
+        r.raise_for_status()
         data = r.json()
-        return data.get("access_token", user_token)
-    except Exception:
+        token = data.get("access_token")
+        if token:
+            logger.info("Successfully exchanged short-lived token for long-lived token")
+            return token
+        flash("Token exchange failed, using original token.", "warning")
+        return user_token
+    except requests.RequestException as e:
+        logger.error(f"Token exchange failed: {e}")
+        flash(f"Token exchange failed: {e}", "warning")
         return user_token
 
 @app.route("/", methods=["GET"])
 def index():
-    return render_template_string(HTML)
+    form = TokenForm()
+    return render_template_string(HTML, form=form)
 
 @app.route("/extract", methods=["POST"])
 def extract():
-    user_token = request.form.get("user_token","").strip()
-    app_id = request.form.get("app_id","").strip()
-    app_secret = request.form.get("app_secret","").strip()
+    form = TokenForm()
+    if not form.validate_on_submit():
+        flash("Please provide a valid user access token.", "danger")
+        return render_template_string(HTML, form=form)
 
-    if not user_token:
-        flash("Please provide a user access token.", "danger")
-        return redirect(url_for("index"))
+    user_token = form.user_token.data.strip()
+    app_id = form.app_id.data.strip()
+    app_secret = form.app_secret.data.strip()
 
+    # Validate app_id format (should be numeric)
+    if app_id and not app_id.isdigit():
+        flash("App ID must be numeric.", "danger")
+        return render_template_string(HTML, form=form)
+
+    # Optionally exchange for long-lived user token
     used_token = exchange_short_lived_for_long(user_token, app_id or None, app_secret or None)
 
-    # Request more fields for pages: category, fan_count, perms
+    # Call /me/accounts to list pages and page access tokens
     params = {
         "access_token": used_token,
-        "fields": "name,id,access_token,category,fan_count,perms"
+        "fields": "name,id,access_token"
     }
     try:
         resp = requests.get(f"{GRAPH_API}/me/accounts", params=params, timeout=12)
+        resp.raise_for_status()
         data = resp.json()
-    except Exception as e:
+    except requests.RequestException as e:
+        logger.error(f"Graph API request failed: {e}")
         flash(f"Network error: {e}", "danger")
-        return redirect(url_for("index"))
+        return render_template_string(HTML, form=form)
 
     if "error" in data:
         err = data["error"]
         msg = err.get("message", str(err))
+        logger.error(f"Graph API error: {msg}")
         flash(f"Graph API error: {msg}", "danger")
-        return render_template_string(HTML)
+        return render_template_string(HTML, form=form)
 
     pages = data.get("data", [])
-    norm = []
-    for p in pages:
-        norm.append({
-            "name": p.get("name","<no name>"),
-            "id": p.get("id",""),
-            "category": p.get("category"),
-            "fan_count": p.get("fan_count"),
-            "perms": p.get("perms", []),
-            "access_token": p.get("access_token","<no token returned>")
-        })
+    # Normalize list of dicts (ensure keys exist)
+    norm = [
+        {
+            "name": p.get("name", "<no name>"),
+            "id": p.get("id", ""),
+            "access_token": p.get("access_token", "<no token returned>")
+        }
+        for p in pages
+    ]
 
-    return render_template_string(HTML, pages=norm)
+    return render_template_string(HTML, form=form, pages=norm)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    # Debug mode disabled for production; use a WSGI server like Gunicorn in production
+    app.run(host="0.0.0.0", port=5000, debug=False)
