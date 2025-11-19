@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Post Spammer Dashboard</title>
+    <style>
+        body { background: #0f0f0f; color: #00ff00; font-family: monospace; padding: 20px; }
+        .box { border: 1px solid #333; padding: 20px; margin-bottom: 20px; background: #1a1a1a; }
+        input, button { width: 100%; padding: 10px; margin: 5px 0; background: #333; color: white; border: 1px solid #444; }
+        button { cursor: pointer; font-weight: bold; }
+        button:hover { background: #444; }
+        #logs { height: 300px; overflow-y: scroll; border: 1px solid #333; padding: 10px; background: black; }
+    </style>
+</head>
+<body>
+    <h1>😈 FACEBOOK POST SPAMMER 😈</h1>
+
+    <div class="box">
+        <h3>1. Login Bot</h3>
+        <input type="text" id="cookies" placeholder="Paste AppState (Cookies JSON) here...">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <div class="box">
+        <h3>2. Start Spamming</h3>
+        <form id="spamForm" enctype="multipart/form-data">
+            <input type="text" name="postID" placeholder="Post UID (e.g., 1234567890)">
+            <input type="number" name="speed" placeholder="Speed (Seconds) e.g., 5">
+            
+            <label>Gali File (.txt):</label>
+            <input type="file" name="msgFile" accept=".txt">
+            
+            <label>Hater Name File (.txt):</label>
+            <input type="file" name="haterFile" accept=".txt">
+            
+            <button type="button" onclick="startSpam()">🚀 START ATTACK</button>
+        </form>
+        <button onclick="stopSpam()" style="background: #990000;">🛑 STOP ATTACK</button>
+    </div>
+
+    <div class="box">
+        <h3>Logs:</h3>
+        <div id="logs"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const logsDiv = document.getElementById('logs');
+
+        socket.on('botlog', (msg) => {
+            const p = document.createElement('p');
+            p.innerText = msg;
+            logsDiv.prepend(p);
+        });
+
+        async function login() {
+            const cookies = document.getElementById('cookies').value;
+            await fetch('/configure', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cookies })
+            });
+        }
+
+        async function startSpam() {
+            const form = document.getElementById('spamForm');
+            const formData = new FormData(form);
+            
+            const res = await fetch('/start-spam', {
+                method: 'POST',
+                body: formData // No headers needed for FormData
+            });
+            alert(await res.text());
+        }
+
+        async function stopSpam() {
+            const res = await fetch('/stop-spam', { method: 'POST' });
+            alert(await res.text());
+        }
+    </script>
+</body>
+              </html>
+              
