@@ -5,33 +5,34 @@ const path = require('path');
 
 const app = express();
 
-// Yahan maine PORT 8080 kar diya hai
-// process.env.PORT isliye rakha hai taaki Zeabur agar apna port de to error na aaye
+// Port 8080 (Zeabur compatible)
 const PORT = process.env.PORT || 8080;
 
-// AppState limit increased
+// AppState bada hota hai isliye limit badhai hai
 app.use(bodyParser.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public'))); 
 
-// API Endpoint: AppState to EAAB Token (Best for Commenting)
+// Public folder serve karna (HTML file ke liye)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// API Endpoint: AppState se EAAB Token nikalna
 app.post('/get-eaab', async (req, res) => {
     const { appState } = req.body;
 
     if (!appState) {
-        return res.status(400).json({ status: 'error', message: 'AppState nahi mila!' });
+        return res.status(400).json({ status: 'error', message: 'AppState khali hai!' });
     }
 
     try {
-        // 1. Cookie String banana
+        // Step 1: AppState JSON ko Cookie String banana
         let cookieString;
         try {
             const state = typeof appState === 'string' ? JSON.parse(appState) : appState;
             cookieString = state.map(item => `${item.key}=${item.value}`).join('; ');
         } catch (e) {
-            return res.status(400).json({ status: 'error', message: 'AppState ka format galat hai.' });
+            return res.status(400).json({ status: 'error', message: 'Invalid JSON Format. Sahi AppState paste karo.' });
         }
 
-        // 2. Request to Ads Manager
+        // Step 2: Ads Manager se request karna (EAAB ke liye)
         const response = await axios.get('https://adsmanager.facebook.com/adsmanager/manage/campaigns', {
             headers: {
                 'cookie': cookieString,
@@ -42,21 +43,20 @@ app.post('/get-eaab', async (req, res) => {
 
         const html = response.data;
 
-        // 3. Extract EAAB Token
+        // Step 3: EAAB Token Dhundna
         const tokenMatch = html.match(/access_token:"(EAAB.*?)"/);
 
         if (tokenMatch && tokenMatch[1]) {
             res.json({ 
                 status: 'success', 
-                token: tokenMatch[1],
-                message: 'Token mil gaya! Loader me lagao.'
+                token: tokenMatch[1] 
             });
         } else {
-            res.status(400).json({ status: 'failed', message: 'Token nahi mila. Cookies shayad expire hain.' });
+            res.status(400).json({ status: 'failed', message: 'Token nahi mila. Cookies expire ho sakti hain ya Ads Manager open nahi ho raha.' });
         }
 
     } catch (error) {
-        console.error(error.message);
+        console.error("Error details:", error.message);
         res.status(500).json({ status: 'error', message: 'Server Error: ' + error.message });
     }
 });
@@ -64,3 +64,4 @@ app.post('/get-eaab', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+    
