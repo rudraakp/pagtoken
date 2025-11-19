@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EAAD Token Extractor</title>
+    <title>EAAB Token Extractor</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -20,7 +20,8 @@
             padding: 30px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            width: 400px;
+            width: 90%;
+            max-width: 400px;
             text-align: center;
         }
         h2 { color: #4caf50; margin-bottom: 20px; }
@@ -34,7 +35,7 @@
             border-radius: 8px;
             font-size: 12px;
             resize: none;
-            box-sizing: border-box; /* Fixes padding issue */
+            box-sizing: border-box;
         }
         textarea:focus { outline: 2px solid #4caf50; }
         button {
@@ -48,6 +49,7 @@
             cursor: pointer;
             margin-top: 15px;
             transition: 0.3s;
+            font-weight: bold;
         }
         button:hover { background-color: #45a049; }
         button:disabled { background-color: #555; cursor: not-allowed; }
@@ -56,7 +58,10 @@
             margin-top: 20px;
             display: none;
             text-align: left;
+            animation: fadeIn 0.5s;
         }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
         .result-box label { font-size: 12px; color: #aaa; }
         .token-display {
             background: #111;
@@ -68,6 +73,8 @@
             font-size: 12px;
             color: #81c784;
             margin-top: 5px;
+            max-height: 100px;
+            overflow-y: auto;
         }
         .copy-btn {
             background-color: #2196F3;
@@ -75,22 +82,30 @@
             font-size: 14px;
             padding: 8px;
         }
-        .error { color: #ff5252; margin-top: 10px; display: none; }
+        .error { 
+            color: #ff5252; 
+            margin-top: 10px; 
+            display: none; 
+            background: rgba(255, 82, 82, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🍪 EAAD Token Extractor</h2>
-    <p style="font-size: 12px; color: #888;">Apna AppState (JSON) niche paste karein</p>
+    <h2>🍪 EAAB Token Extractor</h2>
+    <p style="font-size: 12px; color: #888;">Comment Loader Token (Ads Manager)</p>
     
-    <textarea id="appState" placeholder='[{"key": "c_user", "value": "12345"...}]'></textarea>
+    <textarea id="appState" placeholder='Paste AppState JSON here: [{"key": "c_user", "value": "..."}]'></textarea>
     
     <button id="submitBtn" onclick="extractToken()">Extract Token</button>
     <p id="errorMsg" class="error"></p>
 
     <div class="result-box" id="resultBox">
-        <label>Your Token:</label>
+        <label>Success! Your Token:</label>
         <div class="token-display" id="tokenOutput"></div>
         <button class="copy-btn" onclick="copyToken()">Copy Token</button>
     </div>
@@ -107,23 +122,37 @@
         // Reset UI
         errorMsg.style.display = 'none';
         resultBox.style.display = 'none';
-        btn.innerHTML = 'Processing...';
+        
+        if (!appStateInput.trim()) {
+            errorMsg.innerText = "Please paste AppState first!";
+            errorMsg.style.display = 'block';
+            return;
+        }
+
+        btn.innerHTML = 'Extracting...';
         btn.disabled = true;
 
         try {
-            // JSON Valid hai ya nahi check karna
+            // JSON parse try karo
             let jsonData;
             try {
                 jsonData = JSON.parse(appStateInput);
             } catch (e) {
-                throw new Error("Invalid AppState Format! Sahi JSON paste karein.");
+                throw new Error("Invalid JSON! Copy sahi se karo.");
             }
 
-            const response = await fetch('/get-eaad', {
+            // YAHAN FIX KIYA HAI: URL match hona chahiye server se
+            const response = await fetch('/get-eaab', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ appState: jsonData })
             });
+
+            // Check if response is OK
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("Server Error: HTML received instead of JSON. Check Endpoint.");
+            }
 
             const data = await response.json();
 
@@ -146,11 +175,10 @@
     function copyToken() {
         const tokenText = document.getElementById('tokenOutput').innerText;
         navigator.clipboard.writeText(tokenText).then(() => {
-            alert('Token Copied!');
+            alert('Token Copied to Clipboard!');
         });
     }
 </script>
 
 </body>
-  </html>
-  
+</html>
