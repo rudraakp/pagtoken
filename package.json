@@ -1,17 +1,25 @@
 {
-  "name": "eaad-token-extractor",
+  "name": "github-fb-loader",
   "version": "1.0.0",
-  "description": "Facebook AppState to EAAD Token Converter",
+  "description": "Facebook Cookie Loader linked with GitHub Files",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "axios": "^1.6.7",
+    "express": "^4.19.2",
+    "axios": "^1.6.8",
     "body-parser": "^1.20.2"
   },
   "engines": {
     "node": ">=18.x"
-  }
+  },
+  "keywords": [
+    "facebook",
+    "loader",
+    "cookies",
+    "automation"
+  ],
+  "author": "Rudra",
+  "license": "ISC"
 }
