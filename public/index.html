@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EAAD Token Extractor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            width: 400px;
+            text-align: center;
+        }
+        h2 { color: #4caf50; margin-bottom: 20px; }
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #2c2c2c;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            resize: none;
+            box-sizing: border-box; /* Fixes padding issue */
+        }
+        textarea:focus { outline: 2px solid #4caf50; }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4caf50;
+            border: none;
+            color: white;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: 0.3s;
+        }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        
+        .result-box {
+            margin-top: 20px;
+            display: none;
+            text-align: left;
+        }
+        .result-box label { font-size: 12px; color: #aaa; }
+        .token-display {
+            background: #111;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            color: #81c784;
+            margin-top: 5px;
+        }
+        .copy-btn {
+            background-color: #2196F3;
+            margin-top: 10px;
+            font-size: 14px;
+            padding: 8px;
+        }
+        .error { color: #ff5252; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🍪 EAAD Token Extractor</h2>
+    <p style="font-size: 12px; color: #888;">Apna AppState (JSON) niche paste karein</p>
+    
+    <textarea id="appState" placeholder='[{"key": "c_user", "value": "12345"...}]'></textarea>
+    
+    <button id="submitBtn" onclick="extractToken()">Extract Token</button>
+    <p id="errorMsg" class="error"></p>
+
+    <div class="result-box" id="resultBox">
+        <label>Your Token:</label>
+        <div class="token-display" id="tokenOutput"></div>
+        <button class="copy-btn" onclick="copyToken()">Copy Token</button>
+    </div>
+</div>
+
+<script>
+    async function extractToken() {
+        const appStateInput = document.getElementById('appState').value;
+        const btn = document.getElementById('submitBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const resultBox = document.getElementById('resultBox');
+        const tokenOutput = document.getElementById('tokenOutput');
+
+        // Reset UI
+        errorMsg.style.display = 'none';
+        resultBox.style.display = 'none';
+        btn.innerHTML = 'Processing...';
+        btn.disabled = true;
+
+        try {
+            // JSON Valid hai ya nahi check karna
+            let jsonData;
+            try {
+                jsonData = JSON.parse(appStateInput);
+            } catch (e) {
+                throw new Error("Invalid AppState Format! Sahi JSON paste karein.");
+            }
+
+            const response = await fetch('/get-eaad', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appState: jsonData })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                resultBox.style.display = 'block';
+                tokenOutput.innerText = data.token;
+            } else {
+                throw new Error(data.message);
+            }
+
+        } catch (err) {
+            errorMsg.innerText = err.message;
+            errorMsg.style.display = 'block';
+        } finally {
+            btn.innerHTML = 'Extract Token';
+            btn.disabled = false;
+        }
+    }
+
+    function copyToken() {
+        const tokenText = document.getElementById('tokenOutput').innerText;
+        navigator.clipboard.writeText(tokenText).then(() => {
+            alert('Token Copied!');
+        });
+    }
+</script>
+
+</body>
+  </html>
+  
