@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Linked Loader</title>
+    <style>
+        body { background-color: #000; color: #0f0; font-family: 'Courier New', monospace; padding: 20px; }
+        .container { border: 1px solid #0f0; padding: 20px; max-width: 500px; margin: 0 auto; border-radius: 10px; box-shadow: 0 0 15px #0f0; }
+        input, button { width: 100%; padding: 12px; margin-top: 10px; background: #111; color: #fff; border: 1px solid #333; border-radius: 5px; }
+        input[type="file"] { padding: 10px; background: #222; }
+        button { font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        #startBtn { background: #0f0; color: #000; }
+        #stopBtn { background: #f00; color: #fff; display: none; }
+        .logs { height: 200px; overflow-y: auto; background: #050505; border: 1px solid #333; margin-top: 15px; padding: 10px; font-size: 12px; }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #222; }
+        .success { color: #0f0; } .error { color: #f00; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="text-align: center;">📂 GitHub Cookie Loader</h2>
+
+    <label>1. Upload Cookies File (.txt)</label>
+    <input type="file" id="cookieFile" accept=".txt">
+    
+    <label>2. Target Post ID</label>
+    <input type="text" id="postId" placeholder="Enter Numeric Post ID">
+
+    <label>3. Speed (Seconds)</label>
+    <input type="number" id="delay" value="5">
+
+    <button id="startBtn" onclick="startLoader()">Start Attack</button>
+    <button id="stopBtn" onclick="stopLoader()">Stop Attack</button>
+
+    <div class="logs" id="logArea">
+        <div class="log-entry">System Ready... Waiting for input.</div>
+    </div>
+</div>
+
+<script>
+    let intervalId = null;
+    let cookieData = "";
+    let currentIndex = 0; // Message list ko track karne ke liye
+
+    // File Reader Logic
+    document.getElementById('cookieFile').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                cookieData = e.target.result;
+                log("Cookies Loaded Successfully from File! ✅", "success");
+            };
+            reader.readAsText(file);
+        }
+    });
+
+    function log(msg, type = '') {
+        const logs = document.getElementById('logArea');
+        const div = document.createElement('div');
+        div.className = `log-entry ${type}`;
+        div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logs.prepend(div);
+    }
+
+    function startLoader() {
+        const postId = document.getElementById('postId').value;
+        const delay = document.getElementById('delay').value * 1000;
+
+        if (!cookieData || !postId) {
+            alert("Cookies File upload karo aur Post ID daalo!");
+            return;
+        }
+
+        document.getElementById('startBtn').style.display = 'none';
+        document.getElementById('stopBtn').style.display = 'block';
+        log("🚀 Loader Started...", "success");
+
+        // Function to send request
+        const runAttack = async () => {
+            try {
+                const response = await fetch('/run-loader', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        cookies: cookieData, 
+                        postId: postId, 
+                        msgIndex: currentIndex 
+                    })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    log(`Success: ${data.message}`, "success");
+                    currentIndex = data.nextIndex; // Update index for next loop
+                } else {
+                    log(`Error: ${data.message}`, "error");
+                    if(data.message.includes("Expire")) stopLoader();
+                }
+            } catch (err) {
+                log("Server Connection Failed!", "error");
+            }
+        };
+
+        runAttack(); // Pehla hit
+        intervalId = setInterval(runAttack, delay); // Loop start
+    }
+
+    function stopLoader() {
+        clearInterval(intervalId);
+        document.getElementById('startBtn').style.display = 'block';
+        document.getElementById('stopBtn').style.display = 'none';
+        log("🛑 Loader Stopped.", "error");
+    }
+</script>
+
+</body>
+</html>
