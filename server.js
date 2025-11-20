@@ -1,63 +1,47 @@
 import express from "express";
 import { makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
-import pino from "pino";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import QRCode from "qrcode";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
 
-let sock;
+let globalSocket = null;
 
-// Start WhatsApp Socket
-async function startWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState("./session");
+async function startWASession() {
+    const { state, saveCreds } = await useMultiFileAuthState("./auth_info");
 
-    sock = makeWASocket({
-        logger: pino({ level: "silent" }),
-        printQRInTerminal: false,
+    const sock = makeWASocket({
         auth: {
             creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
-        }
+            keys: makeCacheableSignalKeyStore(state.keys, null)
+        },
+        printQRInTerminal: false
     });
 
     sock.ev.on("creds.update", saveCreds);
-
-    return sock;
+    globalSocket = sock;
 }
 
-// API → generate pairing code
+startWASession();
+
 app.post("/pair", async (req, res) => {
     try {
-        let { phone } = req.body;
-        phone = phone.replace(/[^0-9]/g, "");
+        const { number } = req.body;
 
-        if (!phone.startsWith("91")) {
-            return res.json({ error: "Start with country code e.g. 91XXXXXXXXXX" });
+        if (!number || number.length < 8) {
+            return res.json({ status: false, message: "Invalid phone number" });
         }
 
-        if (!sock) await startWhatsApp();
+        const code = await globalSocket.requestPairingCode(number);
+        res.json({ status: true, code: code });
 
-        const pc = await sock.requestPairingCode(phone);
-        const code = pc?.match(/.{1,4}/g)?.join("-");
-
-        console.log("PAIRING CODE:", code);
-
-        res.json({ code });
-    } catch (e) {
-        res.json({ error: e.message });
+    } catch (err) {
+        res.json({ status: false, message: err.message });
     }
 });
 
-// Default route
-app.get("/", (req, res) =>
-    res.sendFile(path.join(__dirname, "public", "index.html"))
-);
+app.use(express.static("public"));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on", PORT));
+app.listen(3000, () => console.log("Server running on port 3000"));
