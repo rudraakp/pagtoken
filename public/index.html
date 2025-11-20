@@ -1,58 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>WhatsApp Pairing Code</title>
-    <style>
-        body { 
-            background: #111; color: white; 
-            font-family: Arial; text-align: center; 
-            padding-top: 60px;
-        }
-        input {
-            padding: 12px; width: 280px;
-            border: none; border-radius: 6px;
-            margin-top: 10px;
-        }
-        button {
-            padding: 12px 25px;
-            font-size: 17px;
-            margin-top: 15px;
-            background: #00d4ff;
-            color: black; border: none;
-            border-radius: 6px; cursor: pointer;
-        }
-        #codeBox {
-            margin-top: 40px; font-size: 32px;
-            color: #00ffea; font-weight: bold;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>WhatsApp Pairing Code</title>
+<style>
+    body { font-family: Arial; background:#111; color:#fff; text-align:center; padding:50px; }
+    input { padding:10px; width:250px; font-size:18px; }
+    button { padding:10px 25px; font-size:18px; margin-top:10px; }
+    .code-box { margin-top:20px; font-size:40px; letter-spacing:5px; }
+</style>
 </head>
 <body>
 
-<h1>Generate WhatsApp Pairing Code</h1>
+<h1>WhatsApp Pairing Code Generator</h1>
 
-<input id="phone" placeholder="91XXXXXXXXXX">
+<input id="number" placeholder="Enter Phone Number (with country code)">
 <br>
-<button onclick="generate()">Generate</button>
+<button onclick="getCode()">Generate</button>
 
-<div id="codeBox"></div>
+<div class="code-box" id="result"></div>
 
 <script>
-async function generate() {
-    const phone = document.getElementById("phone").value;
+async function getCode() {
+    const number = document.getElementById("number").value;
+    document.getElementById("result").innerHTML = "Loading...";
 
-    const res = await fetch("/pair", {
+    let res = await fetch("/pair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone })
+        body: JSON.stringify({ number })
     });
 
-    const data = await res.json();
+    res = await res.json();
 
-    if (data.code) {
-        document.getElementById("codeBox").innerHTML = data.code;
+    if (res.status) {
+        document.getElementById("result").innerHTML = res.code;
     } else {
-        document.getElementById("codeBox").innerHTML = "❌ " + data.error;
+        document.getElementById("result").innerHTML = "Error: " + res.message;
     }
 }
 </script>
