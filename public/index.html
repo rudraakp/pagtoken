@@ -1,79 +1,147 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Ayansh Fighter Bot</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Pairing Code Generator</title>
     <style>
-        body { background: #000; color: #0f0; font-family: "Courier New", monospace; padding: 20px; text-align: center; }
-        h1 { text-shadow: 0 0 10px #0f0; }
-        .container { max-width: 600px; margin: auto; border: 1px solid #333; padding: 20px; background: #111; box-shadow: 0 0 20px #0f0; }
-        input, button { width: 90%; padding: 12px; margin: 10px 0; background: #222; color: #fff; border: 1px solid #444; outline: none; }
-        button { background: #004400; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.3s; }
-        button:hover { background: #006600; box-shadow: 0 0 10px #0f0; }
-        #logs { height: 300px; overflow-y: scroll; text-align: left; background: #050505; padding: 10px; border: 1px solid #333; margin-top: 20px; font-size: 12px; color: #ccc; }
-        .status { font-size: 14px; color: #ff0; margin-bottom: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        h1 {
+            color: #25d366;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: calc(100% - 20px);
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #25d366;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #1ea051;
+        }
+        #result {
+            margin-top: 25px;
+            font-size: 1.1em;
+            color: #555;
+            word-break: break-all; /* Ensures long codes don't overflow */
+        }
+        #codeDisplay {
+            font-weight: bold;
+            color: #075e54;
+            background-color: #e7ffe7;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            display: none; /* Hidden by default */
+        }
+        .error {
+            color: #d9534f;
+            margin-top: 15px;
+        }
+        .loading {
+            margin-top: 15px;
+            color: #007bff;
+        }
     </style>
 </head>
 <body>
-
-    <h1>😈 AYANSH FIGHTER BOT 😈</h1>
-    
     <div class="container">
-        <p class="status">Status: <span id="status">Waiting...</span></p>
-
-        <h3>🔐 BOT LOGIN PANEL</h3>
-        
-        <input type="text" id="cookies" placeholder="Paste AppState (Cookies JSON) here...">
-        <input type="text" id="adminID" placeholder="Admin UID (Your FB ID)">
-        <input type="text" id="prefix" placeholder="Prefix (Default: $)" value="$">
-        
-        <button onclick="startBot()">🚀 LAUNCH BOT</button>
-
-        <div id="logs">
-            <div>Waiting for logs...</div>
+        <h1>WhatsApp Pairing Code</h1>
+        <form id="pairingForm">
+            <label for="phoneNumber">Enter your Country Code + Phone Number:</label>
+            <input type="text" id="phoneNumber" placeholder="e.g., 919876543210" required>
+            <button type="submit" id="generateButton">Generate Code</button>
+        </form>
+        <div id="result">
+            <p id="message"></p>
+            <p id="codeDisplay"></p>
         </div>
+        <p class="error" id="errorMessage"></p>
+        <p class="loading" id="loadingMessage" style="display:none;">Generating code...</p>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
-        const logsDiv = document.getElementById('logs');
-        const statusSpan = document.getElementById('status');
+        document.getElementById('pairingForm').addEventListener('submit', async (event) => {
+            event.preventDefault(); // Prevent default form submission
 
-        // Live Logs receive karna
-        socket.on('botlog', (msg) => {
-            const p = document.createElement('div');
-            p.style.borderBottom = "1px solid #222";
-            p.style.padding = "5px";
-            p.innerText = msg;
-            logsDiv.prepend(p);
-            
-            if(msg.includes("Online")) statusSpan.innerText = "✅ ONLINE";
-            if(msg.includes("Error")) statusSpan.innerText = "❌ ERROR";
-        });
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const messageDisplay = document.getElementById('message');
+            const codeDisplay = document.getElementById('codeDisplay');
+            const errorMessage = document.getElementById('errorMessage');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const generateButton = document.getElementById('generateButton');
 
-        async function startBot() {
-            const cookies = document.getElementById('cookies').value;
-            const adminID = document.getElementById('adminID').value;
-            const prefix = document.getElementById('prefix').value;
-
-            if(!cookies || !adminID) {
-                alert("Cookies aur Admin ID dono zaroori hain!");
-                return;
-            }
+            messageDisplay.textContent = '';
+            codeDisplay.textContent = '';
+            codeDisplay.style.display = 'none';
+            errorMessage.textContent = '';
+            loadingMessage.style.display = 'block';
+            generateButton.disabled = true; // Disable button during request
 
             try {
-                const res = await fetch('/configure', {
+                // Adjust this URL if your backend is on a different domain/port
+                const response = await fetch('/request-pairing-code', { 
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ cookies, adminID, prefix })
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber: phoneNumber })
                 });
-                alert(await res.text());
-            } catch(e) {
-                alert("Error connecting to server.");
-            }
-        }
-    </script>
 
+                const data = await response.json();
+
+                if (data.success) {
+                    messageDisplay.textContent = 'Use this code to link your WhatsApp device:';
+                    codeDisplay.textContent = data.code;
+                    codeDisplay.style.display = 'block';
+                } else {
+                    errorMessage.textContent = data.message || 'An unknown error occurred.';
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                errorMessage.textContent = 'Could not connect to the server. Please try again later.';
+            } finally {
+                loadingMessage.style.display = 'none';
+                generateButton.disabled = false; // Re-enable button
+            }
+        });
+    </script>
 </body>
-          </html>
-          
+</html>
