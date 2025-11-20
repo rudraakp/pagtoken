@@ -17,8 +17,6 @@ let botNickname = '𝐀𝐘𝐀𝐍𝐒𝐇 𝐁𝐎𝐓';
 let currentCookies = null;
 let reconnectAttempt = 0;
 let joinedGroups = new Set();
-
-// Har group ki alag setting store karne ke liye
 let spamConfigs = {}; 
 
 const signature = `\n                      ⚠️\n                  𝐀𝐘𝐀𝐍𝐒𝐇 𝐁𝐀𝐃𝐌𝐀𝐒𝐇 𝐇𝐄𝐑𝐄 ⚠️`;
@@ -53,7 +51,6 @@ function getOrCreateConfig(threadID) {
   return spamConfigs[threadID];
 }
 
-// --- MESSAGE FORMATTER ---
 async function formatMessage(api, event, mainMessage) {
     const { senderID } = event;
     let senderName = 'User';
@@ -76,14 +73,39 @@ function saveCookies() {
     const newAppState = botAPI.getAppState();
     const configToSave = { botNickname, cookies: newAppState };
     fs.writeFileSync('config.json', JSON.stringify(configToSave, null, 2));
-    emitLog('✅ AppState saved.');
   } catch (e) {}
 }
 
-// --- 🟢 ORIGINAL LOGIN LOGIC (As Requested) ---
+// --- SMART COOKIE PARSER (NEW) ---
+function parseSmartCookies(input) {
+    // Agar input seedha object hai (already parsed)
+    if (typeof input === 'object') return input;
 
+    try {
+        // Koshish 1: JSON Parse karo
+        return JSON.parse(input);
+    } catch (e) {
+        // Koshish 2: Agar JSON fail ho, to String format (c_user=123; ...) try karo
+        if (typeof input === 'string' && input.includes('=')) {
+            const cookies = [];
+            input.split(';').forEach(pair => {
+                const parts = pair.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const value = parts.slice(1).join('=').trim();
+                    cookies.push({ key: key, value: value, domain: "facebook.com", path: "/" });
+                }
+            });
+            return cookies;
+        }
+        // Agar dono fail ho jaye
+        throw new Error("Invalid Cookie Format");
+    }
+}
+
+// --- LOGIN LOGIC ---
 function initializeBot(cookies, prefixValue, adminIDValue) {
-  emitLog('🚀 Initializing bot with ws3-fca...');
+  emitLog('🚀 Initializing bot...');
   currentCookies = cookies;
   if(prefixValue) prefix = prefixValue;
   if(adminIDValue) adminID = adminIDValue;
@@ -91,68 +113,50 @@ function initializeBot(cookies, prefixValue, adminIDValue) {
 
   login({ appState: currentCookies }, (err, api) => {
     if (err) {
-      emitLog(`❌ Login error: ${err.message}. Retrying in 10 seconds.`, true);
+      emitLog(`❌ Login error: ${err.message}. Retrying in 10s...`, true);
       setTimeout(() => initializeBot(currentCookies, prefix, adminID), 10000);
       return;
     }
 
     emitLog('✅ Bot successfully logged in.');
     botAPI = api;
-    botAPI.setOptions({
-      selfListen: true,
-      listenEvents: true,
-      updatePresence: false
-    });
+    botAPI.setOptions({ selfListen: true, listenEvents: true, updatePresence: false });
 
-    // Pehle thread list update karein
     updateJoinedGroups(api);
 
-    // Delay ke baad baaki functions call karein (Old style)
     setTimeout(() => {
         setBotNicknamesInGroups();
-        sendStartupMessage();
         startListening(api);
     }, 5000); 
 
-    // Periodically save cookies every 10 minutes
     setInterval(saveCookies, 600000);
   });
 }
 
 function startListening(api) {
   api.listenMqtt(async (err, event) => {
-    if (err) {
-      emitLog(`❌ Listener error: ${err.message}. Attempting to reconnect...`, true);
-      reconnectAndListen();
-      return;
-    }
-
+    if (err) return reconnectAndListen();
     try {
       if (event.type === 'message' || event.type === 'message_reply') {
         await handleMessage(api, event);
       } else if (event.logMessageType === 'log:subscribe') {
-        // Agar bot naye group me add ho
         if (event.logMessageData.addedParticipants.some(p => p.userFbId === api.getCurrentUserID())) {
             await api.changeNickname(botNickname, event.threadID, api.getCurrentUserID());
             await api.sendMessage(`😈 AAHAN BOT HERE`, event.threadID);
         }
       }
     } catch (e) {
-      emitLog(`❌ Handler crashed: ${e.message}`, true);
+      emitLog(`❌ Handler Error: ${e.message}`, true);
     }
   });
 }
 
 function reconnectAndListen() {
   reconnectAttempt++;
-  emitLog(`🔄 Reconnect attempt #${reconnectAttempt}...`, false);
-
-  if (botAPI) {
-    try { botAPI.stopListening(); } catch (e) {}
-  }
+  if (botAPI) try { botAPI.stopListening(); } catch (e) {}
 
   if (reconnectAttempt > 5) {
-    emitLog('❌ Maximum reconnect attempts reached. Restarting login process.', true);
+    emitLog('❌ Reconnect failed. Restarting login...', true);
     initializeBot(currentCookies, prefix, adminID);
   } else {
     setTimeout(() => {
@@ -162,28 +166,16 @@ function reconnectAndListen() {
   }
 }
 
-// --- HELPER FUNCTIONS (From Original Code) ---
-
 async function setBotNicknamesInGroups() {
   if (!botAPI) return;
   try {
     const threads = await botAPI.getThreadList(20, null, ['GROUP']);
     const botID = botAPI.getCurrentUserID();
     for (const thread of threads) {
-        try {
-            const threadInfo = await botAPI.getThreadInfo(thread.threadID);
-            if (threadInfo.nicknames[botID] !== botNickname) {
-                await botAPI.changeNickname(botNickname, thread.threadID, botID);
-            }
-        } catch (e) {}
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        try { await botAPI.changeNickname(botNickname, thread.threadID, botID); } catch (e) {}
+        await new Promise(r => setTimeout(r, 1000));
     }
   } catch (e) {}
-}
-
-async function sendStartupMessage() {
-  // Optional startup message logic
-  // emitLog('✅ Startup checks done.');
 }
 
 async function updateJoinedGroups(api) {
@@ -193,42 +185,36 @@ async function updateJoinedGroups(api) {
   } catch (e) {}
 }
 
-
-// --- WEB SERVER (Original Configure Route) ---
+// --- WEB SERVER ---
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static('public'));
-
 app.get('/', (req, res) => res.sendFile(__dirname + '/public/index.html'));
 
-// YE RAHA PURANA WALA CONFIGURE ROUTE (Jo tumne manga tha)
+// --- SMART CONFIGURE ROUTE ---
 app.post('/configure', (req, res) => {
   try {
-    const cookies = JSON.parse(req.body.cookies);
+    // Yahan magic function use kar rahe hain
+    const rawCookies = req.body.cookies;
+    const cookies = parseSmartCookies(rawCookies);
+    
     prefix = req.body.prefix || '/';
     adminID = req.body.adminID;
 
-    if (!Array.isArray(cookies) || cookies.length === 0) {
-      return res.status(400).send('Error: Invalid cookies format.');
-    }
-    if (!adminID) {
-      return res.status(400).send('Error: Admin ID is required.');
-    }
-
-    res.send('Bot configured successfully! Starting...');
+    res.send('Bot configured! Starting Login...');
     initializeBot(cookies, prefix, adminID);
+    
   } catch (e) {
-    res.status(400).send('Error: Invalid configuration.');
-    emitLog('Configuration error: ' + e.message, true);
+    console.log(e);
+    if(!res.headersSent) res.status(400).send('Cookie Error: Sahi format daalo (JSON or Text)');
   }
 });
 
-// Load Config on Start
 try {
   if (fs.existsSync('config.json')) {
     const conf = JSON.parse(fs.readFileSync('config.json'));
     if (conf.cookies) {
-        emitLog('✅ Cookies found. Auto-login...');
+        emitLog('✅ Auto-login from saved config...');
         initializeBot(conf.cookies, prefix, adminID);
     }
   }
@@ -238,8 +224,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => emitLog(`✅ Server running on port ${PORT}`));
 io.on('connection', (s) => { s.emit('botlog', `Bot Status: ${botAPI ? 'Online' : 'Offline'}`); });
 
-
-// --- MAIN COMMAND HANDLER (New Features) ---
+// --- MAIN COMMAND HANDLER ---
 async function handleMessage(api, event) {
   try {
     const { threadID, senderID, body } = event;
@@ -251,50 +236,30 @@ async function handleMessage(api, event) {
     const args = commandBody.split(/ +/);
     const command = args[0].toLowerCase();
 
-    // --- 1. $HELP COMMAND ---
     if (command === 'help') {
-        const helpMsg = `
-🛠️ **𝐀𝐘𝐀𝐍𝐒𝐇 𝐁𝐎𝐓 𝐂𝐎𝐍𝐅𝐈𝐆** 🛠️
----------------------------
-1️⃣ **Setup:**
-   ${prefix}hatername <name>
-   ${prefix}message fille <filename>
-   ${prefix}random speed 1 <ms>
-   ${prefix}random speed 2 <ms>
-
-2️⃣ **Action:**
-   ${prefix}now start  ➡️ Hamla Shuru
-   ${prefix}now off    ➡️ Hamla Band
-
-3️⃣ **Status:**
-   ${prefix}say uptime ➡️ Kitna time hua
-`;
+        const helpMsg = `😈 **COMMANDS** 😈\n${prefix}hatername <name>\n${prefix}message fille <file>\n${prefix}random speed 1/2 <ms>\n${prefix}now start\n${prefix}now off\n${prefix}say uptime`;
         return api.sendMessage(helpMsg, threadID);
     }
 
     if (!isAdmin) return; 
-
     const config = getOrCreateConfig(threadID);
 
-    // --- 2. $HATERNAME ---
     if (command === 'hatername') {
         const name = args.slice(1).join(' ');
-        if (!name) return api.sendMessage("❌ Naam likh! Usage: $hatername Rahul", threadID);
+        if (!name) return api.sendMessage("❌ Name required", threadID);
         config.haterName = name;
-        return api.sendMessage(`✅ Target Set: ${name}`, threadID);
+        return api.sendMessage(`✅ Target: ${name}`, threadID);
     }
 
-    // --- 3. $MESSAGE FILLE ---
     if (commandBody.startsWith('message fille')) {
         const fileName = args.slice(2).join(' '); 
-        if (!fileName) return api.sendMessage("❌ File name bata! Usage: $message fille np1.txt", threadID);
+        if (!fileName) return api.sendMessage("❌ File name missing", threadID);
         const filePath = path.join(__dirname, fileName);
-        if (!fs.existsSync(filePath)) return api.sendMessage(`❌ File '${fileName}' nahi mili.`, threadID);
+        if (!fs.existsSync(filePath)) return api.sendMessage(`❌ File '${fileName}' not found`, threadID);
         config.filePath = filePath;
         return api.sendMessage(`✅ File Locked: ${fileName}`, threadID);
     }
 
-    // --- 4. SPEEDS ---
     if (commandBody.startsWith('random speed 1')) {
         config.speed1 = parseInt(args[3]) || 2000;
         return api.sendMessage(`✅ Min Speed: ${config.speed1}ms`, threadID);
@@ -304,20 +269,17 @@ async function handleMessage(api, event) {
         return api.sendMessage(`✅ Max Speed: ${config.speed2}ms`, threadID);
     }
 
-    // --- 5. $SAY UPTIME ---
     if (commandBody.startsWith('say uptime')) {
-        if (!config.isRunning || !config.startTime) return api.sendMessage("❌ Abhi koi spam nahi chal raha.", threadID);
-        return api.sendMessage(`⏳ **Spam Uptime:** ${formatTime(Date.now() - config.startTime)}`, threadID);
+        if (!config.isRunning || !config.startTime) return api.sendMessage("❌ Not running.", threadID);
+        return api.sendMessage(`⏳ Uptime: ${formatTime(Date.now() - config.startTime)}`, threadID);
     }
 
-    // --- 6. $NOW START ---
     if (commandBody.startsWith('now start')) {
-        if (!config.haterName) return api.sendMessage("❌ Target name missing", threadID);
-        if (!config.filePath) return api.sendMessage("❌ File missing", threadID);
+        if (!config.haterName || !config.filePath) return api.sendMessage("❌ Setup incomplete!", threadID);
         if (config.isRunning) return api.sendMessage("⚠️ Already running!", threadID);
 
         const messages = fs.readFileSync(config.filePath, 'utf8').split('\n').filter(l => l.trim());
-        if (messages.length === 0) return api.sendMessage("❌ File khali hai!", threadID);
+        if (messages.length === 0) return api.sendMessage("❌ Empty File!", threadID);
 
         config.isRunning = true;
         config.startTime = Date.now();
@@ -329,7 +291,7 @@ async function handleMessage(api, event) {
             const msgLine = messages[config.msgIndex];
             const fullMsg = `${config.haterName} ${msgLine}\n\n😈 MR AAHAN HERE`;
 
-            api.sendMessage(fullMsg, threadID).catch(err => emitLog("Spam Fail"));
+            api.sendMessage(fullMsg, threadID).catch(() => {});
             config.msgIndex = (config.msgIndex + 1) % messages.length;
 
             const min = Math.min(config.speed1, config.speed2);
@@ -341,16 +303,15 @@ async function handleMessage(api, event) {
         spamLoop(); 
     }
 
-    // --- 7. $NOW OFF ---
     if (commandBody.startsWith('now off')) {
-        if (!config.isRunning) return api.sendMessage("❌ Kuch chal hi nahi raha.", threadID);
+        if (!config.isRunning) return api.sendMessage("❌ Not running.", threadID);
         config.isRunning = false;
         config.startTime = null;
         if (config.timer) clearTimeout(config.timer);
         api.sendMessage("🛑 **ATTACK STOPPED**", threadID);
     }
-
   } catch (err) {
     emitLog('Handler Error: ' + err.message, true);
   }
-}
+    }
+    
