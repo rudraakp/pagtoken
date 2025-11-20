@@ -1,25 +1,18 @@
 {
-  "name": "github-fb-loader",
-  "version": "1.0.0",
-  "description": "Facebook Cookie Loader linked with GitHub Files",
-  "main": "server.js",
+  "name": "ayansh-fighter-bot",
+  "version": "3.0.0",
+  "description": "Facebook Group Fighter Bot by Ayansh",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "body-parser": "^1.20.2",
     "express": "^4.19.2",
-    "axios": "^1.6.8",
-    "body-parser": "^1.20.2"
+    "socket.io": "^4.7.5",
+    "ws3-fca": "latest"
   },
-  "engines": {
-    "node": ">=18.x"
-  },
-  "keywords": [
-    "facebook",
-    "loader",
-    "cookies",
-    "automation"
-  ],
-  "author": "Rudra",
+  "author": "Ayansh Badmash",
   "license": "ISC"
 }
