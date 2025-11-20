@@ -8,7 +8,7 @@ import fs from 'fs';
 import cors from 'cors'; // CORS middleware
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(express.json()); // To parse JSON request bodies
 app.use(cors()); // Enable CORS for all routes
