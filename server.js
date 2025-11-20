@@ -1,11 +1,11 @@
-// server.js - FIXING 405 CONNECTION CLOSED ERROR with longer delay
+// server.js - Final Code with QR Code Logic & Proxy
 
 import { makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
 import express from 'express';
 import pino from 'pino';
 import chalk from 'chalk';
-import fs from 'fs';
 import cors from 'cors';
+import { HttpsProxyAgent } from 'https-proxy-agent'; 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,7 +16,15 @@ app.use(cors());
 // State variables
 const SESSION_FOLDER = `./session`;
 let MznKing;
-let waConnectionState = "close"; // Track connection status
+let waConnectionState = "close";
+let qrCodeData = null; // To store the Base64 QR code data
+
+// Get Proxy URL from Environment Variable
+const PROXY_URL = process.env.PROXY;
+const agent = PROXY_URL ? new HttpsProxyAgent(PROXY_URL) : undefined;
+if (agent) {
+    console.log(chalk.magenta.bold("Using PROXY for WhatsApp connection."));
+}
 
 // Utility function for delay
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -33,25 +41,32 @@ const connectBaileys = async () => {
             keys: makeCacheableSignalKeyStore(state.keys, pino.default({ level: "fatal" })),
         },
         markOnlineOnConnect: false,
-        syncFullHistory: false 
+        syncFullHistory: false,
+        agent: agent, 
     });
 
     MznKing.ev.on("connection.update", (s) => {
-        const { connection, lastDisconnect } = s;
-        waConnectionState = connection; // Update global state
+        const { connection, lastDisconnect, qr } = s;
+        waConnectionState = connection;
         
+        // --- QR Code Capturing Logic ---
+        if (qr) {
+            qrCodeData = qr;
+            console.log(chalk.yellow.bold("QR Code received. It is valid for about 30 seconds."));
+        }
+        // -------------------------------
+
         if (connection === "open") {
-            console.log(chalk.yellow("WhatsApp connection opened successfully. Ready for commands."));
+            console.log(chalk.green.bold("WhatsApp connection OPEN. Device is now linked."));
+            qrCodeData = null; // Clear QR data once connected
         }
 
         if (connection === "close") {
             console.error(chalk.red(`WhatsApp connection closed. Status: ${lastDisconnect?.error?.output?.statusCode}`));
             
-            // Reconnect logic: Attempt reconnect unless status is 401 (Auth Failed)
             if (lastDisconnect?.error?.output?.statusCode !== 401) {
-                 // --- FIX: Increased delay to 30 seconds ---
                  const reconnectDelay = 30000; 
-                 console.log(chalk.yellow(`WhatsApp connection closed. Attempting to reconnect Baileys in ${reconnectDelay / 1000} seconds...`));
+                 console.log(chalk.yellow(`Attempting to reconnect Baileys in ${reconnectDelay / 1000} seconds...`));
                  setTimeout(connectBaileys, reconnectDelay); 
             } else {
                  console.log(chalk.red.bold("Authentication failed (401). Please clear session data and pair again."));
@@ -67,50 +82,25 @@ const connectBaileys = async () => {
 // Initial connection
 await connectBaileys();
 
-// --- API Endpoint ---
-
-app.post('/request-pairing-code', async (req, res) => {
-    const { phoneNumber } = req.body;
-
-    if (!phoneNumber) {
-        return res.status(400).json({ success: false, message: "Phone number is required." });
-    }
-
-    let cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
-
-    // 1. Connection Readiness Check 
-    if (waConnectionState !== 'open') {
-         // Wait up to 10 seconds for connection to open
-         console.log(chalk.yellow("Waiting for Baileys connection to open..."));
-         await delay(10000); // Wait 10 seconds (increased from 5s)
-         if (waConnectionState !== 'open') {
-             return res.status(503).json({ success: false, message: "Baileys connection is not stable or open after waiting. Please try again later." });
-         }
+// --- API Endpoint to GET QR Code ---
+app.get('/get-qrcode', async (req, res) => {
+    if (MznKing.authState.creds.registered) {
+        return res.json({ success: true, status: 'linked', message: 'Device is already linked. QR code is not needed.' });
     }
     
-    // 2. Registration Check
-    if (MznKing.authState.creds.registered) {
-        return res.status(200).json({ success: true, message: "WhatsApp already linked. To get a new code, please clear session data or unlink manually.", code: "N/A" });
+    if (qrCodeData) {
+        return res.json({ success: true, status: 'qr_available', qr_code: qrCodeData });
+    }
+    
+    // If QR is not ready, check if connection is open
+    if (waConnectionState !== 'open') {
+        return res.status(503).json({ success: false, status: 'connecting', message: 'Server is trying to connect to WhatsApp. Please try again in a few seconds.' });
     }
 
-    if (!cleanedNumber.startsWith('91')) { // Adjust country code as needed
-        return res.status(400).json({ success: false, message: "Please start with your country code, e.g., +91 for India." });
-    }
-
-    try {
-        // 3. Request the Pairing Code
-        const code = await MznKing.requestPairingCode(cleanedNumber);
-        const formattedCode = code?.match(/.{1,4}/g)?.join("-") || code;
-        
-        console.log(chalk.black(chalk.bgGreen(`Generated Login Code for ${cleanedNumber}: `)), chalk.black(chalk.cyan(formattedCode)));
-        
-        res.json({ success: true, code: formattedCode });
-
-    } catch (error) {
-        console.error(chalk.red("Error requesting pairing code:"), error);
-        res.status(500).json({ success: false, message: "Failed to request pairing code. Check Zeabur logs.", error: error.message });
-    }
+    // This case should be rare, but indicates the QR timed out or wasn.t captured yet.
+    return res.status(503).json({ success: false, status: 'waiting', message: 'Connection open but waiting for QR code generation from WhatsApp.' });
 });
+
 
 // Serve static files (your HTML, CSS, JS) - FOR FRONTEND
 app.use(express.static('public')); 
