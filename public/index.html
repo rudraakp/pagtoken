@@ -3,38 +3,56 @@
 <head>
     <title>WhatsApp Pairing Code</title>
     <style>
-        body { font-family: Arial; background:#0f0f0f; color:white; text-align:center; margin-top:50px; }
-        input { padding:10px; width:300px; font-size:16px; }
-        button { padding:10px 20px; font-size:18px; margin-top:20px; cursor:pointer; }
-        #codeBox { margin-top:30px; font-size:28px; color:#00ffea; }
+        body { 
+            background: #111; color: white; 
+            font-family: Arial; text-align: center; 
+            padding-top: 60px;
+        }
+        input {
+            padding: 12px; width: 280px;
+            border: none; border-radius: 6px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 17px;
+            margin-top: 15px;
+            background: #00d4ff;
+            color: black; border: none;
+            border-radius: 6px; cursor: pointer;
+        }
+        #codeBox {
+            margin-top: 40px; font-size: 32px;
+            color: #00ffea; font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
 <h1>Generate WhatsApp Pairing Code</h1>
 
-<input id="phone" placeholder="Enter phone number with country code (e.g. 91XXXXXXXXXX)">
+<input id="phone" placeholder="91XXXXXXXXXX">
 <br>
-<button onclick="getCode()">Generate Code</button>
+<button onclick="generate()">Generate</button>
 
 <div id="codeBox"></div>
 
 <script>
-async function getCode() {
+async function generate() {
     const phone = document.getElementById("phone").value;
 
     const res = await fetch("/pair", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone })
     });
 
     const data = await res.json();
 
     if (data.code) {
-        document.getElementById("codeBox").innerHTML = "Pairing Code: <br><b>" + data.code + "</b>";
+        document.getElementById("codeBox").innerHTML = data.code;
     } else {
-        document.getElementById("codeBox").innerHTML = "<b>Error: " + data.error + "</b>";
+        document.getElementById("codeBox").innerHTML = "❌ " + data.error;
     }
 }
 </script>
