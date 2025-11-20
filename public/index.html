@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Pairing Code Generator</title>
+    <title>WhatsApp QR Code Scanner</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -28,120 +28,90 @@
             margin-bottom: 25px;
             font-size: 1.8em;
         }
-        label {
-            display: block;
-            margin-bottom: 10px;
-            color: #333;
-            font-weight: bold;
-        }
-        input[type="text"] {
-            width: calc(100% - 20px);
-            padding: 12px;
+        #qr-container {
+            min-height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             margin-bottom: 20px;
-            border: 1px solid #ddd;
+        }
+        #qr-image {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
             border-radius: 5px;
-            font-size: 1em;
-            box-sizing: border-box;
         }
-        button {
-            background-color: #25d366;
-            color: white;
-            padding: 12px 25px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.3s ease;
-        }
-        button:hover {
-            background-color: #1ea051;
-        }
-        #result {
-            margin-top: 25px;
+        #status-message {
             font-size: 1.1em;
             color: #555;
-            word-break: break-all; /* Ensures long codes don't overflow */
-        }
-        #codeDisplay {
             font-weight: bold;
-            color: #075e54;
-            background-color: #e7ffe7;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            display: none; /* Hidden by default */
         }
-        .error {
-            color: #d9534f;
-            margin-top: 15px;
-        }
-        .loading {
-            margin-top: 15px;
-            color: #007bff;
-        }
+        .error { color: #d9534f; }
+        .success { color: #075e54; }
+        .waiting { color: #ff9800; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>WhatsApp Pairing Code</h1>
-        <form id="pairingForm">
-            <label for="phoneNumber">Enter your Country Code + Phone Number:</label>
-            <input type="text" id="phoneNumber" placeholder="e.g., 919876543210" required>
-            <button type="submit" id="generateButton">Generate Code</button>
-        </form>
-        <div id="result">
-            <p id="message"></p>
-            <p id="codeDisplay"></p>
+        <h1>Scan WhatsApp QR Code 📷</h1>
+        <div id="qr-container">
+            <img id="qr-image" style="display:none;" alt="WhatsApp QR Code">
         </div>
-        <p class="error" id="errorMessage"></p>
-        <p class="loading" id="loadingMessage" style="display:none;">Generating code...</p>
+        <p id="status-message" class="waiting">Connecting to WhatsApp server...</p>
+        <p style="font-size: 0.9em; color: #888;">Note: Keep this page open. Refresh to restart connection.</p>
     </div>
 
     <script>
-        document.getElementById('pairingForm').addEventListener('submit', async (event) => {
-            event.preventDefault(); // Prevent default form submission
+        const statusMessage = document.getElementById('status-message');
+        const qrImage = document.getElementById('qr-image');
+        let pollingInterval;
 
-            const phoneNumber = document.getElementById('phoneNumber').value;
-            const messageDisplay = document.getElementById('message');
-            const codeDisplay = document.getElementById('codeDisplay');
-            const errorMessage = document.getElementById('errorMessage');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const generateButton = document.getElementById('generateButton');
-
-            messageDisplay.textContent = '';
-            codeDisplay.textContent = '';
-            codeDisplay.style.display = 'none';
-            errorMessage.textContent = '';
-            loadingMessage.style.display = 'block';
-            generateButton.disabled = true; // Disable button during request
-
+        const checkQrStatus = async () => {
             try {
-                // Adjust this URL if your backend is on a different domain/port
-                const response = await fetch('/request-pairing-code', { 
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ phoneNumber: phoneNumber })
-                });
-
+                const response = await fetch('/get-qrcode');
                 const data = await response.json();
 
-                if (data.success) {
-                    messageDisplay.textContent = 'Use this code to link your WhatsApp device:';
-                    codeDisplay.textContent = data.code;
-                    codeDisplay.style.display = 'block';
+                if (data.status === 'linked') {
+                    // Success: Device already connected
+                    clearInterval(pollingInterval);
+                    statusMessage.className = 'success';
+                    statusMessage.textContent = '✅ Device is successfully linked!';
+                    qrImage.style.display = 'none';
+                } else if (data.status === 'qr_available') {
+                    // QR Code is ready to be scanned
+                    statusMessage.className = 'success';
+                    statusMessage.textContent = 'Scan the QR Code below within 30 seconds:';
+                    
+                    // Display the Base64 image
+                    qrImage.src = 'data:image/png;base64,' + data.qr_code;
+                    qrImage.style.display = 'block';
+
+                    // Continue polling to detect connection status change after scan
+                } else if (data.status === 'connecting' || data.status === 'waiting') {
+                    // Waiting for server to generate QR
+                    statusMessage.className = 'waiting';
+                    statusMessage.textContent = data.message;
+                    qrImage.style.display = 'none';
                 } else {
-                    errorMessage.textContent = data.message || 'An unknown error occurred.';
+                    // Handle server-side errors
+                    statusMessage.className = 'error';
+                    statusMessage.textContent = '❌ Error from server: ' + (data.message || 'Unknown issue.');
+                    qrImage.style.display = 'none';
                 }
+
             } catch (error) {
+                // Handle network errors
+                statusMessage.className = 'error';
+                statusMessage.textContent = '❌ Could not connect to the server API.';
+                clearInterval(pollingInterval);
                 console.error('Fetch error:', error);
-                errorMessage.textContent = 'Could not connect to the server. Please try again later.';
-            } finally {
-                loadingMessage.style.display = 'none';
-                generateButton.disabled = false; // Re-enable button
             }
-        });
+        };
+
+        // Start polling every 2 seconds to check for QR code status
+        // If the code is blocked, this will just keep showing 'connecting'.
+        pollingInterval = setInterval(checkQrStatus, 2000); 
+
     </script>
 </body>
 </html>
