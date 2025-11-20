@@ -1,18 +1,17 @@
 {
-  "name": "ayansh-fighter-bot",
-  "version": "3.0.0",
-  "description": "Facebook Group Fighter Bot by Ayansh",
-  "main": "index.js",
+  "name": "whatsapp-pairing-web",
+  "version": "1.0.0",
+  "description": "WhatsApp pairing code generator with a web interface",
+  "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "dependencies": {
-    "body-parser": "^1.20.2",
-    "express": "^4.19.2",
-    "socket.io": "^4.7.5",
-    "ws3-fca": "latest"
-  },
-  "author": "Ayansh Badmash",
-  "license": "ISC"
+    "@whiskeysockets/baileys": "^6.5.0",
+    "chalk": "^5.3.0",
+    "express": "^4.18.2",
+    "pino": "^8.20.0",
+    "cors": "^2.8.5"
+  }
 }
