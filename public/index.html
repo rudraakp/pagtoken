@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ayansh Fighter Bot</title>
+    <style>
+        body { background: #000; color: #0f0; font-family: "Courier New", monospace; padding: 20px; text-align: center; }
+        h1 { text-shadow: 0 0 10px #0f0; }
+        .container { max-width: 600px; margin: auto; border: 1px solid #333; padding: 20px; background: #111; box-shadow: 0 0 20px #0f0; }
+        input, button { width: 90%; padding: 12px; margin: 10px 0; background: #222; color: #fff; border: 1px solid #444; outline: none; }
+        button { background: #004400; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #006600; box-shadow: 0 0 10px #0f0; }
+        #logs { height: 300px; overflow-y: scroll; text-align: left; background: #050505; padding: 10px; border: 1px solid #333; margin-top: 20px; font-size: 12px; color: #ccc; }
+        .status { font-size: 14px; color: #ff0; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>😈 AYANSH FIGHTER BOT 😈</h1>
+    
+    <div class="container">
+        <p class="status">Status: <span id="status">Waiting...</span></p>
+
+        <h3>🔐 BOT LOGIN PANEL</h3>
+        
+        <input type="text" id="cookies" placeholder="Paste AppState (Cookies JSON) here...">
+        <input type="text" id="adminID" placeholder="Admin UID (Your FB ID)">
+        <input type="text" id="prefix" placeholder="Prefix (Default: $)" value="$">
+        
+        <button onclick="startBot()">🚀 LAUNCH BOT</button>
+
+        <div id="logs">
+            <div>Waiting for logs...</div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const logsDiv = document.getElementById('logs');
+        const statusSpan = document.getElementById('status');
+
+        // Live Logs receive karna
+        socket.on('botlog', (msg) => {
+            const p = document.createElement('div');
+            p.style.borderBottom = "1px solid #222";
+            p.style.padding = "5px";
+            p.innerText = msg;
+            logsDiv.prepend(p);
+            
+            if(msg.includes("Online")) statusSpan.innerText = "✅ ONLINE";
+            if(msg.includes("Error")) statusSpan.innerText = "❌ ERROR";
+        });
+
+        async function startBot() {
+            const cookies = document.getElementById('cookies').value;
+            const adminID = document.getElementById('adminID').value;
+            const prefix = document.getElementById('prefix').value;
+
+            if(!cookies || !adminID) {
+                alert("Cookies aur Admin ID dono zaroori hain!");
+                return;
+            }
+
+            try {
+                const res = await fetch('/configure', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ cookies, adminID, prefix })
+                });
+                alert(await res.text());
+            } catch(e) {
+                alert("Error connecting to server.");
+            }
+        }
+    </script>
+
+</body>
+          </html>
+          
